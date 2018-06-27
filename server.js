@@ -33,7 +33,7 @@ if (sqlURL == null && process.env.DATABASE_SERVICE_NAME) {
 
   }
 }
-var db = null,
+var con = null,
     dbDetails = new Object();
 
 var initDb = function(callback) {
@@ -50,7 +50,6 @@ var initDb = function(callback) {
       return;
     }
     console.log("Connected to MySQL-Database!");
-
     dbDetails.databaseName = db.databaseName;
     dbDetails.url = sqlURLLabel;
     dbDetails.type = 'mysql';
@@ -66,13 +65,12 @@ app.get('/', function (req, res) {
     initDb(function(err){});
   }
   if (con) {
-    var col = db.collection('counts');
 
     con.query("SELECT * FROM customers ORDER BY name", function (err, result) {
       if (err) throw err;
       console.log(result);
     });
-    
+
     var baseUrl = 'siemens.ariscloud.com';
     var pathString = url.parse(req.url).pathname;
     var newUrl = baseUrl + pathString;

@@ -1,7 +1,8 @@
 //  OpenShift sample Node application
 var express = require('express'),
     app     = express(),
-    morgan  = require('morgan');
+    morgan  = require('morgan'),
+    url = require('url');
     
 Object.assign=require('object-assign')
 
@@ -10,25 +11,25 @@ app.use(morgan('combined'))
 
 var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 8080,
     ip   = process.env.IP   || process.env.OPENSHIFT_NODEJS_IP || '0.0.0.0',
-    mongoURL = process.env.OPENSHIFT_MONGODB_DB_URL || process.env.MONGO_URL,
-    mongoURLLabel = "";
+    sqlURL = process.env.OPENSHIFT_MONGODB_DB_URL || process.env.MONGO_URL,
+    sqlURLLabel = "";
 
-if (mongoURL == null && process.env.DATABASE_SERVICE_NAME) {
-  var mongoServiceName = process.env.DATABASE_SERVICE_NAME.toUpperCase(),
-      mongoHost = process.env[mongoServiceName + '_SERVICE_HOST'],
-      mongoPort = process.env[mongoServiceName + '_SERVICE_PORT'],
-      mongoDatabase = process.env[mongoServiceName + '_DATABASE'],
-      mongoPassword = process.env[mongoServiceName + '_PASSWORD']
-      mongoUser = process.env[mongoServiceName + '_USER'];
+if (sqlURL == null && process.env.DATABASE_SERVICE_NAME) {
+  var sqlServiceName = process.env.DATABASE_SERVICE_NAME.toUpperCase(),
+      sqlHost = process.env[sqlServiceName + '_SERVICE_HOST'],
+      sqlPort = process.env[sqlServiceName + '_SERVICE_PORT'],
+      sqlDatabase = process.env[sqlServiceName + '_DATABASE'],
+      sqlPassword = process.env[sqlServiceName + '_PASSWORD']
+      sqlUser = process.env[sqlServiceName + '_USER'];
 
-  if (mongoHost && mongoPort && mongoDatabase) {
-    mongoURLLabel = mongoURL = 'mongodb://';
-    if (mongoUser && mongoPassword) {
-      mongoURL += mongoUser + ':' + mongoPassword + '@';
+  if (sqlHost && sqlPort && sqlDatabase) {
+    sqlURLLabel = sqlURL = 'mysql://';
+    if (sqlUser && sqlPassword) {
+      sqlURL += sqlUser + ':' + sqlPassword + '@';
     }
     // Provide UI label that excludes user id and pw
-    mongoURLLabel += mongoHost + ':' + mongoPort + '/' + mongoDatabase;
-    mongoURL += mongoHost + ':' +  mongoPort + '/' + mongoDatabase;
+    sqlURLLabel += sqlHost + ':' + sqlPort + '/' + sqlDatabase;
+    sqlURL += sqlHost + ':' +  sqlPort + '/' + sqlDatabase;
 
   }
 }
@@ -36,44 +37,47 @@ var db = null,
     dbDetails = new Object();
 
 var initDb = function(callback) {
-  if (mongoURL == null) return;
+  if (sqlURL == null) return;
 
-  var mongodb = require('mongodb');
-  if (mongodb == null) return;
+  var mysql = require('mysql');
+  if (mysql == null) return;
 
-  mongodb.connect(mongoURL, function(err, conn) {
+  var con = mysql.createConnection({host: sqlHost, user: sqlUser, password: sqlPassword, database: sqlDatabase});
+  
+  con.connect(function(err) {
     if (err) {
       callback(err);
       return;
     }
+    console.log("Connected to MySQL-Database!");
 
-    db = conn;
     dbDetails.databaseName = db.databaseName;
-    dbDetails.url = mongoURLLabel;
-    dbDetails.type = 'MongoDB';
+    dbDetails.url = sqlURLLabel;
+    dbDetails.type = 'mysql';
 
-    console.log('Connected to MongoDB at: %s', mongoURL);
+    console.log('Connected to mysql at: %s', sqlURL);
   });
 };
 
 app.get('/', function (req, res) {
   // try to initialize the db on every request if it's not already
   // initialized.
-  if (!db) {
+  if (!con) {
     initDb(function(err){});
   }
-  if (db) {
+  if (con) {
     var col = db.collection('counts');
-    // Create a document with request IP and current time of request
-    col.insert({ip: req.ip, date: Date.now()});
-    col.count(function(err, count){
-      if (err) {
-        console.log('Error running count. Message:\n'+err);
-      }
-      res.render('index.html', { pageCountMessage : count, dbInfo: dbDetails });
+
+    con.query("SELECT * FROM customers ORDER BY name", function (err, result) {
+      if (err) throw err;
+      console.log(result);
     });
-  } else {
-    res.render('index.html', { pageCountMessage : null});
+    
+    var baseUrl = 'siemens.ariscloud.com';
+    var pathString = url.parse(req.url).pathname;
+    var newUrl = baseUrl + pathString;
+
+    res.redirect(302, newUrl);
   }
 });
 
@@ -99,7 +103,7 @@ app.use(function(err, req, res, next){
 });
 
 initDb(function(err){
-  console.log('Error connecting to Mongo. Message:\n'+err);
+  console.log('Error connecting to SQL Database - Please contact your BPMS Administrator. Message:\n'+err);
 });
 
 app.listen(port, ip);
